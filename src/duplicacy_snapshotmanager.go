@@ -908,7 +908,7 @@ func (manager *SnapshotManager) CheckSnapshots(snapshotID string, revisionsToChe
 						_, exist, _, err := manager.storage.FindChunk(0, chunkID, false)
 						if err != nil {
 							LOG_WARN("SNAPSHOT_VALIDATE", "Failed to check the existence of chunk %s: %v",
-							         chunkID, err)
+								chunkID, err)
 						} else if exist {
 							LOG_INFO("SNAPSHOT_VALIDATE", "Chunk %s is confirmed to exist", chunkID)
 							continue
@@ -1096,7 +1096,7 @@ func (manager *SnapshotManager) CheckSnapshots(snapshotID string, revisionsToChe
 				remainingTime := int64(float64(totalChunks - downloadedChunks) / float64(downloadedChunks) * elapsedTime)
 				percentage := float64(downloadedChunks) / float64(totalChunks) * 100.0
 				LOG_INFO("VERIFY_PROGRESS", "Verified chunk %s (%d/%d), %sB/s %s %.1f%%",
-						chunkID, downloadedChunks, totalChunks, PrettySize(speed), PrettyTime(remainingTime), percentage)
+					chunkID, downloadedChunks, totalChunks, PrettySize(speed), PrettyTime(remainingTime), percentage)
 
 				manager.config.PutChunk(chunk)
 			}
@@ -1479,8 +1479,8 @@ func (manager *SnapshotManager) PrintFile(snapshotID string, revision int, path 
 
 	file := manager.FindFile(snapshot, path, false)
 	if !manager.RetrieveFile(snapshot, file, nil, func(chunk []byte) {
-			fmt.Printf("%s", chunk)
-		}) {
+		fmt.Printf("%s", chunk)
+	}) {
 		LOG_ERROR("SNAPSHOT_RETRIEVE", "File %s is corrupted in snapshot %s at revision %d",
 			path, snapshot.ID, snapshot.Revision)
 		return false
@@ -1837,12 +1837,12 @@ func (manager *SnapshotManager) resurrectChunk(fossilPath string, chunkID string
 func (manager *SnapshotManager) PruneSnapshots(selfID string, snapshotID string, revisionsToBeDeleted []int,
 	tags []string, retentions []string,
 	exhaustive bool, exclusive bool, ignoredIDs []string,
-	dryRun bool, deleteOnly bool, collectOnly bool, threads int) bool {
+	dryRun bool, deleteOnly bool, collectOnly bool, threads int, keep_max int) bool {
 
 	LOG_DEBUG("DELETE_PARAMETERS",
-		"id: %s, revisions: %v, tags: %v, retentions: %v, exhaustive: %t, exclusive: %t, "+
+		"id: %s, revisions: %v, tags: %v, keep_max: %d, retentions: %v, exhaustive: %t, exclusive: %t, "+
 			"dryrun: %t, deleteOnly: %t, collectOnly: %t",
-		snapshotID, revisionsToBeDeleted, tags, retentions,
+		snapshotID, revisionsToBeDeleted, tags, keep_max, retentions,
 		exhaustive, exclusive, dryRun, deleteOnly, collectOnly)
 
 	if len(revisionsToBeDeleted) > 0 && (len(tags) > 0 || len(retentions) > 0) {
@@ -1875,6 +1875,12 @@ func (manager *SnapshotManager) PruneSnapshots(selfID string, snapshotID string,
 			}
 		}
 	}()
+
+	// A keep-max structure
+	type KeepMax struct {
+		ID string
+		Tag string
+	}
 
 	// A retention policy is specified in the form 'interval:age', where both 'interval' and 'age' are numbers of
 	// days. A retention policy applies to a snapshot if the snapshot is older than the age.  For snapshots older
@@ -2207,14 +2213,32 @@ func (manager *SnapshotManager) PruneSnapshots(selfID string, snapshotID string,
 				}
 			}
 
-		} else if len(tags) > 0 {
+		} else if len(tags) > 0 && keep_max != -1 {
+			var keepMaxMap = make(map[KeepMax]int)
+			for i := 0; i < len(tags); i++ {
+				var tag_snapshots []*Snapshot
+				for j := 0; j < len(snapshots); j++ {
+					if snapshots[j].Tag == tags[i] {
+						keepMaxMap[KeepMax{snapshots[j].ID, snapshots[j].Tag}] += 1
+						tag_snapshots = append(tag_snapshots, snapshots[j])
+					}
+				}
+				for k := 0; k < len(tag_snapshots)-keep_max; k++ {
+					LOG_DEBUG("SNAPSHOT_KEEP_PRUNE", "Pruning snapshot ID: %s, revision: %d, tag: %s", tag_snapshots[k].ID, tag_snapshots[k].Revision, tag_snapshots[k].Tag)
+					tag_snapshots[k].Flag = true
+					toBeDeleted++
+				}
+			}
+			for km, total := range keepMaxMap {
+				LOG_INFO("SNAPSHOT_KEEP_MAX", "Keeping %d of %d snapshots for snapshot %s tag %s", keep_max, total, km.ID, km.Tag)
+			}
+	} else if len(tags) > 0 {
 			for _, snapshot := range snapshots {
 				if _, found := tagMap[snapshot.Tag]; found {
 					snapshot.Flag = true
 					toBeDeleted++
 				}
 			}
-
 		}
 	}
 
@@ -2598,7 +2622,7 @@ func (manager *SnapshotManager) CheckSnapshot(snapshot *Snapshot) (err error) {
 		if entry.Size != fileSize {
 			err = fmt.Errorf("The file %s has a size of %d but the total size of chunks is %d",
 				entry.Path, entry.Size, fileSize)
-		    return false
+			return false
 		}
 
 		return true
