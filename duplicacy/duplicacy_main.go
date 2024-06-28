@@ -24,7 +24,7 @@ import (
 
 	"io/ioutil"
 
-	"github.com/gilbertchen/duplicacy/src"
+	duplicacy "github.com/gilbertchen/duplicacy/src"
 )
 
 const (
@@ -1190,6 +1190,8 @@ func pruneSnapshots(context *cli.Context) {
 	revisions := getRevisions(context)
 	tags := context.StringSlice("t")
 	retentions := context.StringSlice("keep")
+	keepMax := context.Int("keep-max")
+	duplicacy.LOG_DEBUG("PRUNE_KEEP_MAX", "keepMax: %d, tags: %s", keepMax, tags)
 	selfID := preference.SnapshotID
 	snapshotID := preference.SnapshotID
 	if context.Bool("all") {
@@ -1197,7 +1199,14 @@ func pruneSnapshots(context *cli.Context) {
 	} else if context.String("id") != "" {
 		snapshotID = context.String("id")
 	}
-
+	if keepMax != -1 && len(tags) == 0 || len(tags) > 1 {
+		fmt.Fprintf(context.App.Writer, "A single tag (-t option) is required if -keep-max is specified\n")
+		os.Exit(ArgumentExitCode)
+	}
+	if len(retentions) != 0 && keepMax != -1 {
+		fmt.Fprintf(context.App.Writer, "The -keep and -keep-max options are mutually exclusive\n")
+		os.Exit(ArgumentExitCode)
+	}
 	ignoredIDs := context.StringSlice("ignore")
 	exhaustive := context.Bool("exhaustive")
 	exclusive := context.Bool("exclusive")
@@ -1216,7 +1225,7 @@ func pruneSnapshots(context *cli.Context) {
 
 	backupManager.SetupSnapshotCache(preference.Name)
 	backupManager.SnapshotManager.PruneSnapshots(selfID, snapshotID, revisions, tags, retentions,
-		exhaustive, exclusive, ignoredIDs, dryRun, deleteOnly, collectOnly, threads)
+		exhaustive, exclusive, ignoredIDs, dryRun, deleteOnly, collectOnly, threads, keepMax)
 
 	runScript(context, preference.Name, "post")
 }
@@ -1893,6 +1902,12 @@ func main() {
 					Usage:    "keep 1 snapshot every n days for snapshots older than m days",
 					Argument: "<n:m>",
 				},
+				cli.IntFlag{
+					Name:     "keep-max",
+					Value:    -1,
+					Usage:    "keep n snapshots matching the specified tag(s), requires -t",
+					Argument: "<n>",
+				},
 				cli.BoolFlag{
 					Name:  "exhaustive",
 					Usage: "remove all unreferenced chunks (not just those referenced by deleted snapshots)",
@@ -2263,7 +2278,7 @@ func main() {
 	app.Name = "duplicacy"
 	app.HelpName = "duplicacy"
 	app.Usage = "A new generation cloud backup tool based on lock-free deduplication"
-	app.Version = "3.2.4" + " (" + GitCommit + ")"
+	app.Version = GitVersion + " (" + GitCommit + ") on " + GitDate
 
 	// Exit with code 2 if an invalid command is provided
 	app.CommandNotFound = func(context *cli.Context, command string) {
