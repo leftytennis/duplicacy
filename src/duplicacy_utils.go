@@ -11,10 +11,10 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
-	"runtime"
 
 	"github.com/gilbertchen/gopass"
 	"golang.org/x/crypto/pbkdf2"
@@ -270,6 +270,51 @@ func SavePassword(preference Preference, passwordType string, password string) {
 		passwordID = preference.Name + "_" + passwordID
 	}
 	keyringSet(passwordID, password)
+}
+
+// Get the run type
+func GetRunType(frequency string) string {
+
+	now := time.Now()
+	month := now.Month()
+	day := now.Day()
+	day_of_week := now.Weekday()
+	hour := now.Hour()
+
+	auto_tag := frequency
+
+	switch frequency {
+	case "hourly":
+		if month == 1 && day == 1 && hour == 0 {
+			auto_tag = "yearly"
+		} else if month % 3 == 0 && hour == 0 {
+			auto_tag = "quarterly"
+		} else if day == 1 && hour == 0 {
+			auto_tag = "monthly"
+		} else if day_of_week == time.Sunday && hour == 0 {
+			auto_tag = "weekly"
+		} else if hour == 0 {
+			auto_tag = "daily"
+		} else {
+			auto_tag = "hourly"
+		}
+	case "daily":
+		if month == 1 && day == 1 {
+			auto_tag = "yearly"
+		} else if month % 3 == 0 {
+			auto_tag = "quarterly"
+		} else if day == int(time.Sunday) {
+			auto_tag = "monthly"
+		} else if day_of_week == time.Sunday {
+			auto_tag = "weekly"
+		} else {
+			auto_tag = "daily"
+		}
+	default:
+		auto_tag = frequency
+	}
+
+	return auto_tag
 }
 
 // The following code was modified from the online article  'Matching Wildcards: An Algorithm', by Kirk J. Krauss,

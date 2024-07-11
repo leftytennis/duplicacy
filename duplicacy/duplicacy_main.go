@@ -24,7 +24,7 @@ import (
 
 	"io/ioutil"
 
-	"github.com/gilbertchen/duplicacy/src"
+	duplicacy "github.com/gilbertchen/duplicacy/src"
 )
 
 const (
@@ -808,7 +808,12 @@ func backupRepository(context *cli.Context) {
 
 	metadataChunkSize := context.Int("metadata-chunk-size")
 	maximumInMemoryEntries := context.Int("max-in-memory-entries")
-	backupManager.Backup(repository, quickMode, threads, context.String("t"), showStatistics, enableVSS, vssTimeout, enumOnly, metadataChunkSize, maximumInMemoryEntries)
+	tag := context.String("t")
+	if tag == "auto" {
+		tag = duplicacy.GetRunType("daily")
+		duplicacy.LOG_INFO("AUTO_TAG", "Automatically set tag to %s", tag)
+	}
+	backupManager.Backup(repository, quickMode, threads, tag, showStatistics, enableVSS, vssTimeout, enumOnly, metadataChunkSize, maximumInMemoryEntries)
 
 	runScript(context, preference.Name, "post")
 }
@@ -925,6 +930,10 @@ func listSnapshots(context *cli.Context) {
 	}
 
 	tag := context.String("t")
+	if tag == "auto" {
+		tag = duplicacy.GetRunType("daily")
+		duplicacy.LOG_INFO("AUTO_TAG", "Automatically set tag to %s", tag)
+	}
 	revisions := getRevisions(context)
 
 	backupManager := duplicacy.CreateBackupManager(preference.SnapshotID, storage, repository, password, "", "", preference.ExcludeByAttribute)
@@ -981,6 +990,11 @@ func checkSnapshots(context *cli.Context) {
 	}
 
 	tag := context.String("t")
+	if tag == "auto" {
+		tag = duplicacy.GetRunType("daily")
+		duplicacy.LOG_INFO("AUTO_TAG", "Automatically set tag to %s", tag)
+	}
+	
 	revisions := getRevisions(context)
 
 	backupManager := duplicacy.CreateBackupManager(preference.SnapshotID, storage, repository, password, "", "", false)
@@ -1188,6 +1202,12 @@ func pruneSnapshots(context *cli.Context) {
 
 	revisions := getRevisions(context)
 	tags := context.StringSlice("t")
+	for i, _ := range tags {
+		if tags[i] == "auto" {
+			tags[i] = duplicacy.GetRunType("daily")
+			duplicacy.LOG_INFO("AUTO_TAG", "Automatically set tag to %s", tags[i])	
+		}
+	}
 	retentions := context.StringSlice("keep")
 	selfID := preference.SnapshotID
 	snapshotID := preference.SnapshotID
@@ -1501,7 +1521,7 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:     "t",
-					Usage:    "assign a tag to the backup",
+					Usage:    "assign a tag to the backup, use \"auto\" to automatically assign a tag",
 					Argument: "<tag>",
 				},
 				cli.BoolFlag{
