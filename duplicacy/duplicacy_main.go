@@ -24,15 +24,19 @@ import (
 
 	"io/ioutil"
 
-	"github.com/gilbertchen/duplicacy/src"
+	duplicacy "github.com/gilbertchen/duplicacy/src"
 )
 
 const (
 	ArgumentExitCode = 3
 )
 
-var ScriptEnabled bool
-var GitCommit = "unofficial"
+var (
+	GitCommit = "unofficial"
+	GitDate = "unofficial"
+	GitVersion = "unofficial"
+	ScriptEnabled bool
+)
 
 func getRepositoryPreference(context *cli.Context, storageName string) (repository string,
 	preference *duplicacy.Preference) {
@@ -1190,6 +1194,8 @@ func pruneSnapshots(context *cli.Context) {
 	revisions := getRevisions(context)
 	tags := context.StringSlice("t")
 	retentions := context.StringSlice("keep")
+	keepDays := context.Int("keep-days")
+	duplicacy.LOG_DEBUG("PRUNE_KEEP_DAYS", "keep_days: %d, tags: %s", keepDays, tags)
 	selfID := preference.SnapshotID
 	snapshotID := preference.SnapshotID
 	if context.Bool("all") {
@@ -1197,7 +1203,10 @@ func pruneSnapshots(context *cli.Context) {
 	} else if context.String("id") != "" {
 		snapshotID = context.String("id")
 	}
-
+	if len(retentions) != 0 && keepDays != -1 {
+		fmt.Fprintf(context.App.Writer, "The -keep and -keep-days options are mutually exclusive\n")
+		os.Exit(ArgumentExitCode)
+	}
 	ignoredIDs := context.StringSlice("ignore")
 	exhaustive := context.Bool("exhaustive")
 	exclusive := context.Bool("exclusive")
@@ -1216,7 +1225,7 @@ func pruneSnapshots(context *cli.Context) {
 
 	backupManager.SetupSnapshotCache(preference.Name)
 	backupManager.SnapshotManager.PruneSnapshots(selfID, snapshotID, revisions, tags, retentions,
-		exhaustive, exclusive, ignoredIDs, dryRun, deleteOnly, collectOnly, threads)
+		exhaustive, exclusive, ignoredIDs, dryRun, deleteOnly, collectOnly, threads, keepDays)
 
 	runScript(context, preference.Name, "post")
 }
@@ -1893,6 +1902,12 @@ func main() {
 					Usage:    "keep 1 snapshot every n days for snapshots older than m days",
 					Argument: "<n:m>",
 				},
+				cli.IntFlag{
+					Name:     "keep-days",
+					Value:    -1,
+					Usage:    "keep snapshots no older than n days matching specified tag(s)",
+					Argument: "<n>",
+				},
 				cli.BoolFlag{
 					Name:  "exhaustive",
 					Usage: "remove all unreferenced chunks (not just those referenced by deleted snapshots)",
@@ -2263,7 +2278,7 @@ func main() {
 	app.Name = "duplicacy"
 	app.HelpName = "duplicacy"
 	app.Usage = "A new generation cloud backup tool based on lock-free deduplication"
-	app.Version = "3.2.4" + " (" + GitCommit + ")"
+	app.Version = GitVersion + " (" + GitCommit + ") on " + GitDate
 
 	// Exit with code 2 if an invalid command is provided
 	app.CommandNotFound = func(context *cli.Context, command string) {
