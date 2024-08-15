@@ -1,0 +1,68 @@
+
+archives:
+  - format_overrides:
+      - formats: [ 'zip' ]
+        goos: windows
+    formats: [ 'tar.gz' ]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Summary }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+before:
+  hooks:
+    - go mod tidy && go mod vendor
+
+builds:
+  - binary: duplicacy
+    env:
+      - CGO_ENABLED=0
+    ldflags: -s -w -X main.GitVersion={{.Summary}} -X main.GitCommit={{.ShortCommit}} -X main.GitDate={{if .IsGitClean}}{{.CommitDate}}{{else}}{{.Date}}{{end}}
+    main: duplicacy/duplicacy_main.go
+    targets:
+      - go_first_class
+
+changelog:
+  filters:
+    exclude:
+      - "^docs:"
+      - "^misc"
+      - "^test:"
+  sort: asc
+  
+checksum:
+  algorithm: sha256
+  name_template: 'sha256_checksums.txt'
+
+env_files:
+  github_token: .github_token
+
+project_name: duplicacy
+
+release:
+  disable: false
+  draft: true
+  github:
+    name: duplicacy
+    owner: leftytennis
+  name_template: "{{.Summary}}"
+  replace_existing_draft: true
+  skip_upload: false
+
+snapshot:
+  version_template: "{{.ProjectName}}_{{.Summary}}"
+
+source:
+  enabled: true
+
+universal_binaries:
+  - replace: true
+
+version: 2
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/goreleaser/goreleaser/v2.7.0/www/docs/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj expandtab
