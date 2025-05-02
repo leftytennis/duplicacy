@@ -2278,7 +2278,13 @@ func main() {
 	app.Name = "duplicacy"
 	app.HelpName = "duplicacy"
 	app.Usage = "A new generation cloud backup tool based on lock-free deduplication"
+<<<<<<< HEAD
 	app.Version = GitVersion + " (" + GitCommit + ") on " + GitDate
+||||||| parent of 2def016 (Bump version to 3.2.5)
+	app.Version = "3.2.4" + " (" + GitCommit + ")"
+=======
+	app.Version = "3.2.5" + " (" + GitCommit + ")"
+>>>>>>> 2def016 (Bump version to 3.2.5)
 
 	// Exit with code 2 if an invalid command is provided
 	app.CommandNotFound = func(context *cli.Context, command string) {
